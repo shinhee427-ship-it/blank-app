@@ -15,19 +15,43 @@ for key in ['members','current_players','court_games','game_queue','waiting_pool
         st.session_state[key] = {} if key in ['court_games','manual_mode'] else []
 
 # ---------------------------
-# 1. CSV 업로드
+# 1. CSV 또는 EXCEL 업로드
 # ---------------------------
 with st.sidebar:
-    uploaded_file = st.file_uploader("CSV 업로드 (이름,성별,급수,혼합가능 True/False)", type=["csv"])
+    uploaded_file = st.file_uploader(
+        "파일 업로드 (CSV 또는 Excel)\n(이름, 성별, 급수, 혼합가능)",
+        type=["csv", "xlsx"]
+    )
+
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        required_cols = ["이름","성별","급수","혼합가능"]
-        if all(col in df.columns for col in required_cols):
-            df['혼합가능'] = df['혼합가능'].astype(bool)
-            st.session_state.members = df.to_dict(orient="records")
-            st.success(f"{len(st.session_state.members)}명 회원 불러옴")
-        else:
-            st.error(f"CSV 컬럼 필요: {required_cols}")
+        try:
+            # 파일 타입에 따라 읽기
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+
+            required_cols = ["이름","성별","급수","혼합가능"]
+
+            if all(col in df.columns for col in required_cols):
+
+                # 혼합가능 값 정리 (TRUE/FALSE, 1/0 모두 처리)
+                df['혼합가능'] = df['혼합가능'].astype(str).str.lower().map(
+                    {"true": True, "1": True, "false": False, "0": False}
+                )
+
+                if df['혼합가능'].isnull().any():
+                    st.warning("혼합가능 컬럼에 잘못된 값이 있어 False로 처리됩니다")
+                    df['혼합가능'] = df['혼합가능'].fillna(False)
+
+                st.session_state.members = df.to_dict(orient="records")
+                st.success(f"{len(st.session_state.members)}명 회원 불러옴")
+
+            else:
+                st.error(f"필요 컬럼: {required_cols}")
+
+        except Exception as e:
+            st.error(f"파일 읽기 실패: {e}")
 
 # ---------------------------
 # 2. 참석자 선택
